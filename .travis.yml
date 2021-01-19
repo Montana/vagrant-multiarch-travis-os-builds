@@ -1,0 +1,350 @@
+---
+sudo: required
+
+env:
+  global:
+  - VAGRANT_VERSION="2.2.9"
+
+notifications:
+  slack:
+    on_failure: always
+
+fleet_script_vagrant_win_scoop_tasks : &fleet_script_vagrant_win_scoop_tasks
+      script:
+          - echo "============================================="
+          - echo "=============Installing Vagrant scoop=============="
+          # - Set-ExecutionPolicy RemoteSigned -scope CurrentUser
+          # - Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')
+          # - iwr -useb get.scoop.sh | iex # or shorter #The command "iwr -useb get.scoop.sh | iex" exited with 127.
+          # - scoop install vagrant
+          # - vagrant version
+          - echo "============================================="
+
+fleet_script_vagrant_win_tasks : &fleet_script_vagrant_win_tasks
+      script:
+          - echo "============================================="
+          - echo "=============Installing Vagrant chocolatey=============="
+          # - choco feature disable --name=exitOnRebootDetected #exitOnRebootDetected was disabled by default. Explicitly setting value
+          # - choco install vagrant # https://github.com/chocolatey/choco/issues/1927
+          # - choco install vagrant --version 2.2.0
+          # - choco install vagrant --${VAGRANT_VERSION}
+          # - vagrant version #Packages requiring reboot: - vagrant (exit code 3010)
+          - echo "============================================="
+
+fleet_script_vagrant_macos_tasks : &fleet_script_vagrant_macos_tasks
+      script:
+          - echo "============================================="
+          - echo "=============Installing Vagrant=============="
+          - /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)" #Install Homebrew
+          # - brew doctor
+          - brew update
+          # - brew cask install virtualbox #Install Virtual Box Cask
+          - brew search vagrant
+          - brew cask install vagrant #Install Vagrant Casks
+          - vagrant version
+          # The command "vagrant plugin install vagrant-libvirt" exited with 1
+          # - vagrant plugin install vagrant-libvirt #The vagrant-libvirt plugin is required when using KVM on Linux
+          - vagrant plugin install vagrant-mutate #Convert vagrant boxes to work with different providers
+          # - vagrant status
+          - vagrant box add "archlinux/archlinux"  --provider=virtualbox
+          # qemu-img was not found in your path
+          # - vagrant mutate "archlinux/archlinux"  libvirt
+          - sudo vagrant global-status
+          # - vagrant up
+          - sudo vagrant global-status
+          # - vagrant ssh -c "hostnamectl"
+          - echo "============================================="
+
+fleet_script_vagrant_tasks : &fleet_script_vagrant_tasks
+      script:
+          - sudo apt-get install -y cpu-checker bridge-utils dnsmasq-base ebtables libvirt-bin libvirt-dev qemu-kvm qemu-utils ruby-dev
+          - sudo systemctl status libvirtd
+          - sudo libvirtd --version
+          - egrep -c '(vmx|svm)' /proc/cpuinfo #If 0 it means that your CPU doesn't support hardware virtualization.If 1 or more it does - but you still need to make sure that virtualization is enabled in the BIOS.
+          - sudo addgroup libvirtd
+          - sudo adduser  $(id -un) libvirtd #ensure that your username is added to the group libvirtd
+          - sudo kvm-ok
+          - echo "============================================="
+          - echo "=============Installing Vagrant=============="
+          - sudo wget -nv https://releases.hashicorp.com/vagrant/${VAGRANT_VERSION}/vagrant_${VAGRANT_VERSION}_x86_64.deb
+          - sudo dpkg -i vagrant_${VAGRANT_VERSION}_x86_64.deb
+          - vagrant version
+          - echo "============================================="
+          - sudo vagrant plugin install vagrant-libvirt #The vagrant-libvirt plugin is required when using KVM on Linux
+          - sudo vagrant plugin install vagrant-mutate #Convert vagrant boxes to work with different providers
+          - sudo vagrant status
+          - sudo virsh list --all #show all running KVM/libvirt VMs
+          - sudo vagrant box add "bento/centos-8.0" --provider=virtualbox
+          - sudo vagrant mutate "bento/centos-8.0" libvirt
+          - sudo vagrant up --provider=libvirt
+          - sudo vagrant box list #veridy installed boxes
+          - sudo vagrant status #Check the status of the VMs to see that none of them have been created yet
+          # - sudo vagrant up --provider=libvirt vg-irods01
+          # - sudo vagrant up --no-parallel --provider=libvirt # vagrant serial runs
+          # - travis_wait 30 sudo vagrant up --provider=libvirt
+          - sudo vagrant status
+          - sudo vagrant global-status
+          # - sudo vagrant ssh -c "hostnamectl"
+          - sudo virsh list --all #show all running KVM/libvirt VMs
+
+fleet_script_tasks : &fleet_script_tasks
+      script:
+        - python --version
+
+fleet_install_tasks : &fleet_install_tasks
+      install:
+        - pip install -r requirements.txt
+
+
+matrix:
+  fast_finish: true
+  include:
+
+# Package 'libvirt-bin' has no installation candidate
+    - name: "Python 3.7 on focal amd64"
+      dist: focal
+      arch: amd64
+      language: python
+      python: 3.7
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+
+# Package 'libvirt-bin' has no installation candidate
+    - name: "Python 3.7 on focal arm64"
+      dist: focal
+      arch: arm64
+      language: python
+      python: 3.7
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+
+# Package 'libvirt-bin' has no installation candidate
+    - name: "Python 3.7 on focal ppc64le"
+      dist: focal
+      arch: ppc64le
+      language: python
+      # python: 3.7 #Unable to download 3.7 archive. The archive may not exist. Please consider a different version
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+
+# Package 'libvirt-bin' has no installation candidates
+    - name: "Python 3.7 on focal s390x"
+      dist: focal
+      arch: s390x
+      language: python
+      # python: 3.7 #Unable to download 3.7 archive. The archive may not exist. Please consider a different version
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+
+
+    - name: "Python 3.7 on bionic amd64"
+      dist: bionic
+      arch: amd64
+      language: python
+      python: 3.7
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+
+    # INFO: /dev/kvm does not exist
+    - name: "Python 3.7 on bionic arm64" # package architecture (amd64) does not match system (arm64)
+      os: linux
+      arch: arm64
+      dist: bionic
+      language: python
+      python: 3.7
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+    
+    # INFO: /dev/kvm does not exist
+    - name: "Python 3.7 on bionic ppc64le" #Unable to locate package osquery
+      os: linux
+      arch: ppc64le
+      dist: bionic
+      language: python
+      python: 3.7
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+    
+    # INFO: /dev/kvm does not exist
+    - name: "Python 3.7 on bionic s390x" #Unable to locate package osquery
+      os: linux
+      arch: s390x
+      dist: bionic
+      language: python
+      python: 3.7
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      # <<: *fleet_script_vagrant_tasks
+      after_success:
+        - deactivate
+
+    - name: "Python 3.7.5 on macOS 10.15.5 osx xcode12u"
+      os: osx
+      osx_image: 
+        - xcode12u
+      addons:
+        homebrew:
+          casks:
+          - vagrant
+          packages:
+          - beanstalk
+          update: true
+      language: shell
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+        - python --version
+        - pip install -r requirements.txt
+      # <<: *fleet_install_tasks
+      # <<: *fleet_script_tasks
+      script:
+        # - brew list --versions
+        - vagrant version
+          # The command "vagrant plugin install vagrant-libvirt" exited with 1
+          # - vagrant plugin install vagrant-libvirt #The vagrant-libvirt plugin is required when using KVM on Linux
+        - vagrant plugin install vagrant-mutate #Convert vagrant boxes to work with different providers
+          # - vagrant status
+        - vagrant box add "archlinux/archlinux"  --provider=virtualbox
+          # qemu-img was not found in your path
+          # - vagrant mutate "archlinux/archlinux"  libvirt
+        - sudo vagrant global-status
+          # - vagrant up
+        - sudo vagrant global-status
+          # - vagrant ssh -c "hostnamectl"
+        - echo "============================================="        
+      after_success:
+        # - brew cask uninstall multipass
+        - deactivate
+
+    - name: "Python 2.7.17 on macOS xcode10.2"
+      os: osx
+      osx_image: xcode10.2
+      language: shell
+      before_install:
+        - pip install virtualenv
+        - virtualenv -p $(which python2) ~venvpy2
+        - source ~venvpy2/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      <<: *fleet_script_vagrant_macos_tasks
+      after_success:
+        - deactivate
+    
+      
+    
+    - name: "Python 3.7.5 on macOS xcode10.2"
+      os: osx
+      osx_image: xcode10.2
+      language: shell
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      <<: *fleet_script_vagrant_macos_tasks
+      after_success:
+        - deactivate
+    
+    - name: "Python 3.7.5 on macOS xcode9.4 "
+      os: osx
+      osx_image: xcode9.4
+      language: shell
+      before_install:
+        - pip3 install virtualenv
+        - virtualenv -p $(which python3) ~venvpy3
+        - source ~venvpy3/bin/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      <<: *fleet_script_vagrant_macos_tasks
+      after_success:
+        - deactivate
+
+ 
+    - name: "Python 3.8 on Windows"
+      os: windows
+      language: shell
+      env:
+        - PATH=/c/Python38:/c/Python38/Scripts:$PATH
+      before_install:
+        - choco install python --version 3.8.1
+        - pip install virtualenv
+        - virtualenv $HOME/venv
+        - source $HOME/venv/Scripts/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      <<: *fleet_script_vagrant_win_tasks
+      <<: *fleet_script_vagrant_win_scoop_tasks
+      after_success:
+        - deactivate
+
+  
+    - name: "Python 3.7 on Windows"
+      os: windows
+      language: shell
+      env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
+      before_install:
+        - choco install python --version 3.7.3
+        - python -m pip install virtualenv
+        - virtualenv $HOME/venv
+        - source $HOME/venv/Scripts/activate
+      <<: *fleet_install_tasks
+      <<: *fleet_script_tasks
+      <<: *fleet_script_vagrant_win_tasks
+      <<: *fleet_script_vagrant_win_scoop_tasks
+      after_success:
+        - deactivate
