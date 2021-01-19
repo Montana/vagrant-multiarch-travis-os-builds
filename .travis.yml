@@ -231,45 +231,6 @@ matrix:
       after_success:
         - deactivate
 
-    - name: "Python 3.7.5 on macOS 10.15.5 osx xcode12u"
-      os: osx
-      osx_image: 
-        - xcode12u
-      addons:
-        homebrew:
-          casks:
-          - vagrant
-          packages:
-          - beanstalk
-          update: true
-      language: shell
-      before_install:
-        - pip3 install virtualenv
-        - virtualenv -p $(which python3) ~venvpy3
-        - source ~venvpy3/bin/activate
-        - python --version
-        - pip install -r requirements.txt
-      # <<: *fleet_install_tasks
-      # <<: *fleet_script_tasks
-      script:
-        # - brew list --versions
-        - vagrant version
-          # The command "vagrant plugin install vagrant-libvirt" exited with 1
-          # - vagrant plugin install vagrant-libvirt #The vagrant-libvirt plugin is required when using KVM on Linux
-        - vagrant plugin install vagrant-mutate #Convert vagrant boxes to work with different providers
-          # - vagrant status
-        - vagrant box add "archlinux/archlinux"  --provider=virtualbox
-          # qemu-img was not found in your path
-          # - vagrant mutate "archlinux/archlinux"  libvirt
-        - sudo vagrant global-status
-          # - vagrant up
-        - sudo vagrant global-status
-          # - vagrant ssh -c "hostnamectl"
-        - echo "============================================="        
-      after_success:
-        # - brew cask uninstall multipass
-        - deactivate
-
     - name: "Python 3.8 on Windows"
       os: windows
       language: shell
